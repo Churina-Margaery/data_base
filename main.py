@@ -9,6 +9,7 @@ from wtforms.validators import DataRequired
 import sqlalchemy
 import datetime
 from sqlalchemy import orm
+from werkzeug.security import generate_password_hash, check_password_hash
 
 
 db_session.global_init("db/blogs.sqlite")
@@ -18,6 +19,19 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 
 SqlAlchemyBase = dec.declarative_base()
+
+
+class RegisterForm(FlaskForm):
+    email = EmailField('Почта', validators=[DataRequired()])
+    password = PasswordField('Пароль', validators=[DataRequired()])
+    password_again = PasswordField('Повторите пароль', validators=[DataRequired()])
+    surname = StringField('Фамилия пользователя', validators=[DataRequired()])
+    name = StringField('Имя пользователя', validators=[DataRequired()])
+    age = StringField('Возраст', validators=[DataRequired()])
+    position = StringField('Положение', validators=[DataRequired()])
+    speciality = StringField('Профессия', validators=[DataRequired()])
+    adress = StringField('Адрес', validators=[DataRequired()])
+    submit = SubmitField('Войти')
 
 
 class LoginForm(FlaskForm):
@@ -43,6 +57,12 @@ class User(SqlAlchemyBase, UserMixin):
 
     modified_date = sqlalchemy.Column(sqlalchemy.DateTime,
                                       default=datetime.datetime.now)
+
+    def set_password(self, password):
+        self.hashed_password = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.hashed_password, password)
 
 
 class Jobs(SqlAlchemyBase):
@@ -116,6 +136,29 @@ def add_job():
         return redirect('/')
     return render_template('jobs.html', title='Adding Job',
                            form=form)
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def reqister():
+    form = RegisterForm()
+    if form.validate_on_submit():
+        if form.password.data != form.password_again.data:
+            return render_template('register.html', title='Регистрация',
+                                   form=form,
+                                   message="Пароли не совпадают")
+        session = db_session.create_session()
+        if session.query(User).filter(User.email == form.email.data).first():
+            return render_template('register.html', title='Регистрация',
+                                   form=form,
+                                   message="Такой пользователь уже есть")
+        user = User()
+        user.name = form.name.data,
+        user.email = form.email.data,
+        user.set_password(form.password.data)
+        session.add(user)
+        session.commit()
+        return redirect('/login')
+    return render_template('register.html', title='Регистрация', form=form)
 
 
 @app.route('/logout')
