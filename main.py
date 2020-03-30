@@ -3,11 +3,12 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 from data import db_session
 import sqlalchemy.ext.declarative as dec
 from flask_wtf import FlaskForm
-from wtforms import PasswordField, BooleanField, SubmitField
+from wtforms import PasswordField, BooleanField, SubmitField, StringField, TextAreaField
 from wtforms.fields.html5 import EmailField
 from wtforms.validators import DataRequired
 import sqlalchemy
 import datetime
+from sqlalchemy import orm
 
 
 db_session.global_init("db/blogs.sqlite")
@@ -44,6 +45,33 @@ class User(SqlAlchemyBase, UserMixin):
                                       default=datetime.datetime.now)
 
 
+class Jobs(SqlAlchemyBase):
+    __tablename__ = 'jobs'
+    id = sqlalchemy.Column(sqlalchemy.Integer,
+                           primary_key=True, autoincrement=True)
+    team_leader = sqlalchemy.Column(sqlalchemy.Integer,
+                                    sqlalchemy.ForeignKey("users.id"))
+    user = orm.relation('User')
+    job = sqlalchemy.Column(sqlalchemy.String, nullable=True)
+    work_size = sqlalchemy.Column(sqlalchemy.Integer, nullable=True)
+    collaborators = sqlalchemy.Column(sqlalchemy.String, nullable=True)
+
+    start_date = sqlalchemy.Column(sqlalchemy.DateTime,
+                                   default=datetime.datetime.now())
+    end_date = sqlalchemy.Column(sqlalchemy.DateTime,
+                                 default=datetime.datetime.now())
+    is_finished = sqlalchemy.Column(sqlalchemy.Boolean, nullable=True)
+
+
+class JobForm(FlaskForm):
+    title = StringField('Job title', validators=[DataRequired()])
+    id = TextAreaField("Team Leader ID")
+    size = TextAreaField("Work Size")
+    collaborators = TextAreaField("Collaborators")
+    is_finished = BooleanField("Is job finished?")
+    submit = SubmitField('Submit')
+
+
 @app.route('/')
 @app.route('/index')
 def index():
@@ -70,6 +98,24 @@ def login():
                                message="Неправильный логин или пароль",
                                form=form)
     return render_template('login.html', title='Авторизация', form=form)
+
+
+@app.route('/addjob', methods=['GET', 'POST'])
+def add_job():
+    form = JobForm()
+    if form.validate_on_submit():
+        session = db_session.create_session()
+        job = Jobs()
+        job.title = form.title.data
+        job.team_leader = form.id.data
+        job.size = form.size.data
+        job.is_finished = form.is_finished.data
+        current_user.job.append(job)
+        session.merge(current_user)
+        session.commit()
+        return redirect('/')
+    return render_template('jobs.html', title='Adding Job',
+                           form=form)
 
 
 @app.route('/logout')
